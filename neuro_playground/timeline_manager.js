@@ -1,3 +1,11 @@
+// let sourceOfThisFile
+// try {
+//     throw Error(``)
+// } catch (error) {
+//     sourceOfThisFile = error?.stack
+// }
+// console.debug(`sourceOfThisFile is:`,sourceOfThisFile)
+
 export class TimelineManager {
     constructor({getCurrentState, loadState, afterForwardsTimestep}={}) {
         this.currentTimestep = 0
@@ -15,12 +23,11 @@ export class TimelineManager {
         }
     }
     scheduleTask(func, relativeTimeIndex=1) {
-        let sourceOfFunction
+        let sourceOfFunction // to give the correct/useful stack trace for the error
         try {
             throw Error(``)
         } catch (error) {
-            sourceOfFunction = error.stack
-            console.debug(`sourceOfFunction is:`,sourceOfFunction)
+            sourceOfFunction = error.stack.split("\n").slice(1).join("\n")
         }
         this._timeline[this.currentTimestep+relativeTimeIndex] = this._timeline[this.currentTimestep+relativeTimeIndex] || []
         this._timeline[this.currentTimestep+relativeTimeIndex].push([func, sourceOfFunction])
