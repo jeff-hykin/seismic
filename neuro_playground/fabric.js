@@ -24,7 +24,8 @@ export function FabricCanvas({
     onObjectScaling,
     onObjectRotating,
     onObjectRemoved,
-    ...props,
+    jsonObjects,
+    ...props
 }={}) {
     const element = document.createElement("canvas")
     element.setAttribute("width", width||window.innerWidth)
@@ -33,17 +34,22 @@ export function FabricCanvas({
     element.style.position = "fixed"
     element.style.top = "0"
     element.style.left = "0"
-    let intervalId = setInterval(() => {
+    let intervalId = setInterval(async () => {
         // "when mounted to the dom" callback
         // NOTE: this is not performant. It would be REAL NICE if there was a callback for mounting to dom, but there isnt one
         //       so we have to poll for it
         if (element.parentElement) {
             clearInterval(intervalId)
-            element.fabric = new fabric.Canvas(element.id, {
+            element.fabric = new fabric.Canvas(element.id)
+            if (jsonObjects) {
+                await element.fabric.loadFromJSON(jsonObjects)
+            }
+            Object.assign(element.fabric, {
                 backgroundColor,
                 selectionColor,
                 selectionLineWidth,
             })
+            console.debug(`element.fabric.backgroundColor is:`,element.fabric.backgroundColor)
             for (const [key, value] of Object.entries({
                 "mouse:down": onMouseDown,
                 "object:added": onObjectAdded,
@@ -64,8 +70,7 @@ export function FabricCanvas({
                     element.fabric.on(key, value)
                 }
             }
-            onceFabricLoads&&onceFabricLoads(element.fabric)
-            // without this backgroundColor will not show up
+            await (onceFabricLoads&&onceFabricLoads(element.fabric))
             element.fabric.renderAll()
         }
     }, 100)
