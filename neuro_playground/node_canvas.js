@@ -194,8 +194,6 @@ export class FabricLine extends fabric.Path {
 }
 fabric.classRegistry.setClass(FabricLine)
 
-let prevHoveNodeId
-const hoverLines = []
 // specific for nodes
 export function NodeCanvas({
     width,
@@ -204,6 +202,14 @@ export function NodeCanvas({
     selectionColor,
     selectionLineWidth,
     onceFabricLoads,
+    inputConnectionStyles={
+        stroke: 'blue',
+        strokeWidth: 5,
+    },
+    outputConnectionStyles={
+        stroke: 'red',
+        strokeWidth: 5,
+    },
     jsonObjects,
     // onMouseDown,
     // onObjectAdded,
@@ -222,6 +228,52 @@ export function NodeCanvas({
     ...props
 }={}) {
     let element
+    
+    // 
+    // helpers
+    // 
+        let prevHoveNodeId
+        const hoverLines = []
+        const showConnectionsOf = (target)=>{
+            // clear previous
+            let idBefore = prevHoveNodeId
+            let hoverLinesBefore = [...hoverLines]
+            for (let each of hoverLinesBefore) {
+                canvas.remove(each)
+            }
+            hoverLines.length = 0
+            prevHoveNodeId = null
+
+            if (target) {
+                const isHoveringANode = target.type === FabricNode.type.toLowerCase()
+                if (isHoveringANode) {
+                    const actualTarget = canvas.objects.filter(each=>each.id===target.id)[0]
+                    if (actualTarget) {
+                        prevHoveNodeId = actualTarget.id
+                        for (let each of actualTarget.outputs) {
+                            const line = new fabric.Line([...Object.values(getCenter(target)), ...Object.values(getCenter(each))], {
+                                objectCaching: false,
+                                ...outputConnectionStyles,
+                            })
+                            hoverLines.push(line)
+                            canvas.add(line)
+                            canvas.add(each) // to draw on top of the line
+                        }
+                        
+                        for (let each of actualTarget.inputs) {
+                            const line = new fabric.Line([...Object.values(getCenter(target)), ...Object.values(getCenter(each))], {
+                                objectCaching: false,
+                                ...inputConnectionStyles,
+                            })
+                            hoverLines.push(line)
+                            canvas.add(line)
+                            canvas.add(each) // to draw on top of the line
+                        }
+                        canvas.add(target) // to draw on top of the line
+                    }
+                }
+            }
+        }
     return element = FabricCanvas({
         width,
         height,
@@ -255,48 +307,7 @@ export function NodeCanvas({
         ...props,
         onMouseMove: (event)=>{
             const { target } = event
-            // clear previous
-            let idBefore = prevHoveNodeId
-            let hoverLinesBefore = [...hoverLines]
-            for (let each of hoverLinesBefore) {
-                canvas.remove(each)
-            }
-            hoverLines.length = 0
-            prevHoveNodeId = null
-
-            if (target) {
-                const isHoveringANode = target.type === FabricNode.type.toLowerCase()
-                if (isHoveringANode) {
-                    const actualTarget = canvas.objects.filter(each=>each.id===target.id)[0]
-                    if (actualTarget) {
-                        prevHoveNodeId = actualTarget.id
-                        for (let each of actualTarget.outputs) {
-                            const line = new fabric.Line([...Object.values(getCenter(target)), ...Object.values(getCenter(each))], {
-                                objectCaching: false,
-                                stroke: 'red',
-                                strokeWidth: 5,
-                                selectable: false,
-                            })
-                            hoverLines.push(line)
-                            canvas.add(line)
-                            canvas.add(each) // to draw on top of the line
-                        }
-                        
-                        for (let each of actualTarget.inputs) {
-                            const line = new fabric.Line([...Object.values(getCenter(target)), ...Object.values(getCenter(each))], {
-                                objectCaching: false,
-                                stroke: 'blue',
-                                strokeWidth: 5,
-                                selectable: false,
-                            })
-                            hoverLines.push(line)
-                            canvas.add(line)
-                            canvas.add(each) // to draw on top of the line
-                        }
-                        canvas.add(target) // to draw on top of the line
-                    }
-                }
-            }
+            showConnectionsOf(target)
         },
         onMouseDown: (event)=>{
             const { target } = event
