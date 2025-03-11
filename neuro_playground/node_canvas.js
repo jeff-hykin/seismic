@@ -75,6 +75,11 @@ export class FabricNode extends fabric.Circle {
             objectCaching: false,
             ...custom,
         })
+        this.set('hasControls', false)
+        // this.set({
+        //     lockScalingX: true,  // Disable horizontal scaling
+        //     lockScalingY: true,  // Disable vertical scaling
+        // })
         Object.assign(this, {
             id: id||`${Math.random()}`,
             label,
@@ -281,15 +286,12 @@ export function NodeCanvas({
         selectionColor,
         selectionLineWidth,
         onceFabricLoads:(canvas)=>{
-            console.log(`fabric loaded, canvas is:`,canvas)
             element.timelineManager = new TimelineManager({
                 getCurrentState: ()=>canvas.toObject(),
                 loadState: (state)=>canvas.loadFromObject(state),
                 afterForwardsTimestep: ()=>{
-                    console.log(`afterForwardsTimestep`)
                     for (let each of canvas.objects) {
                         if (each.type === FabricNode.type.toLowerCase()) {
-                            console.log(`found node:`,each)
                             if (each.willFireNextTimestepBecauseClick) {
                                 console.debug(`each.outputs is:`,each.outputs)
                                 each.willFireNextTimestepBecauseClick = false
