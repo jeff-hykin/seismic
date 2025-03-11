@@ -10,7 +10,8 @@ import { makeDraggable } from "./generic_tools.js"
 
 import { Event, trigger, everyTime, once } from "https://esm.sh/gh/jeff-hykin/good-js@1.14.3.3/source/events.js"
 import { pointsToFunction } from "https://esm.sh/gh/jeff-hykin/good-js@1.14.3.3/source/flattened/points_to_function.js"
-import * as fabric from "https://esm.sh/fabric@6.6.1/dist/fabric.min.js"
+import { fabric, FabricCanvas } from "./fabric.js"
+globalThis.fabric = fabric // debugging
 
 // 
 // node
@@ -122,35 +123,48 @@ import * as fabric from "https://esm.sh/fabric@6.6.1/dist/fabric.min.js"
         stableEnergyLevel: 0.1,
     })
 
-    
-    function FabricCanvas({width, height, backgroundColor, selectionColor, selectionLineWidth, ...props}={}) {
-        const element = document.createElement("canvas")
-        element.setAttribute("width", width||window.innerWidth)
-        element.setAttribute("height", height||window.innerHeight)
-        element.id = `${Math.random()}`
-        element.style.position = "fixed"
-        element.style.top = "0"
-        element.style.left = "0"
-        let intervalId = setInterval(() => {
-            // if mounted to the dom
-            // NOTE: this is not performant it would be nice if there was a callback for mounting to dom, but there isnt one
-            if (element.parentElement) {
-                clearInterval(intervalId)
-                element.fabric = new fabric.Canvas(element.id, {
-                    backgroundColor,
-                    selectionColor,
-                    selectionLineWidth,
-                })
-                // without this backgroundColor will not show up
-                element.fabric.renderAll()
-                globalThis.canvas = element.fabric // debugging only
-            }
-        }, 100)
-        return passAlongProps(element, props)
+    // specific for nodes
+    function NodeCanvas({
+        width,
+        height,
+        backgroundColor,
+        selectionColor,
+        selectionLineWidth,
+        onceFabricLoads,
+        // onMouseDown,
+        // onObjectAdded,
+        // onAfterRender,
+        // onMouseMove,
+        // onMouseUp,
+        // onBeforeSelection,
+        // onSelectionCreated,
+        // onSelectionCleared,
+        // onObjectModified,
+        // onObjectSelected,
+        // onObjectMoving,
+        // onObjectScaling,
+        // onObjectRotating,
+        // onObjectRemoved,
+        ...props,
+    }={}) {
+        return FabricCanvas({
+            width,
+            height,
+            backgroundColor,
+            selectionColor,
+            selectionLineWidth,
+            onceFabricLoads:(canvas)=>{
+                globalThis.canvas = canvas // debugging only
+                // TODO: add pan/zoom
+                onceFabricLoads&&onceFabricLoads(canvas)
+            },
+            ...props,
+            onMouseDown: (options)=>{
+                
+            },
+        })
     }
-    globalThis.fabric = fabric // debugging
-    globalThis.canvasElement = FabricCanvas({ backgroundColor: "rgb(100,100,200)" }) // debugging
-    // globalThis.canvas = globalThis.canvasElement.fabric
+    globalThis.canvasElement = NodeCanvas({ backgroundColor: "rgb(100,100,200)" }) // debugging
     
     // 
     // Main node updater
@@ -173,6 +187,7 @@ import * as fabric from "https://esm.sh/fabric@6.6.1/dist/fabric.min.js"
 const { html } = Elemental({
     ...components,
     Node,
+    FabricCanvas,
 })
 
 document.body = html`
