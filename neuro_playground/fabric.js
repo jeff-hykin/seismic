@@ -1,6 +1,6 @@
 import { passAlongProps } from "https://esm.sh/gh/jeff-hykin/elemental@0.6.5/main/deno.js"
-import * as fabric from "https://esm.sh/fabric@6.6.1/dist/fabric.min.js"
-export { fabric }
+import * as fabrics from "https://esm.sh/fabric@6.6.1/dist/fabric.min.js"
+export const fabric = {...fabrics}
 
 // generic canvas component
 export function FabricCanvas({
@@ -49,7 +49,6 @@ export function FabricCanvas({
                 selectionColor,
                 selectionLineWidth,
             })
-            console.debug(`element.fabric.backgroundColor is:`,element.fabric.backgroundColor)
             for (const [key, value] of Object.entries({
                 "mouse:down": onMouseDown,
                 "object:added": onObjectAdded,

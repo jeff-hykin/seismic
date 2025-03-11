@@ -122,7 +122,71 @@ globalThis.fabric = fabric // debugging
         energyAfterFiring: 0,
         stableEnergyLevel: 0.1,
     })
-
+    
+    class FabricNode extends fabric.Circle {
+        static get type() {
+            return "FabricNode";
+        }
+        constructor({ label, left=100, top=100, radius=50, spikeThreshold=1, startingEnergy=0, energyDecayRate=0.1, id, ...custom }) {
+            super({
+                radius,
+                "startAngle": 0,
+                "endAngle": 360,
+                "counterClockwise": false,
+                "type": "Circle",
+                "version": "6.6.1",
+                "originX": "left",
+                "originY": "top",
+                left,
+                top,
+                // "width": 100,
+                // "height": 100,
+                "fill": `hsl(${hslBlueHue}, 100%, 50%)`,
+                "stroke": "lightgray",
+                "strokeWidth": 5,
+                "strokeDashArray": null,
+                "strokeLineCap": "butt",
+                "strokeDashOffset": 0,
+                "strokeLineJoin": "miter",
+                "strokeUniform": false,
+                "strokeMiterLimit": 4,
+                "scaleX": 1,
+                "scaleY": 1,
+                "angle": 0,
+                "flipX": false,
+                "flipY": false,
+                "opacity": 1,
+                "shadow": null,
+                "visible": true,
+                "backgroundColor": "",
+                "fillRule": "nonzero",
+                "paintFirst": "fill",
+                "globalCompositeOperation": "source-over",
+                "skewX": 0,
+                "skewY": 0,
+                ...custom,
+            })
+            Object.assign(this, {
+                id: id||`${Math.random()}`,
+                label,
+                spikeThreshold,
+                startingEnergy,
+                energyDecayRate,
+            })
+        }
+        toObject(propertiesToInclude) {
+            return {
+                ...super.toObject(propertiesToInclude),
+                id: this.id,
+                label: this.label,
+                spikeThreshold: this.spikeThreshold,
+                startingEnergy: this.startingEnergy,
+                energyDecayRate: this.energyDecayRate,
+            }
+        }
+    }
+    fabric.classRegistry.setClass(FabricNode)
+    
     // specific for nodes
     function NodeCanvas({
         width,
@@ -201,8 +265,8 @@ globalThis.fabric = fabric // debugging
                         "height": 100,
                         "fill": "red",
                         "overlayFill": null,
-                        "stroke": null,
-                        "strokeWidth": 1,
+                        "stroke": "rgba(100,200,200)",
+                        "strokeWidth": 5,
                         "strokeDashArray": null,
                         "scaleX": 1,
                         "scaleY": 1,
@@ -217,13 +281,14 @@ globalThis.fabric = fabric // debugging
                         "transparentCorners": true,
                         "perPixelTargetFind": false,
                         "radius": 50
-                    }
+                    },
+                    (new FabricNode({ label: "A", x:100, y:100, size:50, spikeThreshold:1, startingEnergy:0, energyDecayRate:0.1 })).toObject(),
                 ],
                 // "background": "rgba(0, 0, 0, 0)",
             }
         })
     }
-    globalThis.canvasElement = NodeCanvas({ backgroundColor: "rgb(100,100,200)" }) // debugging
+    globalThis.canvasElement = NodeCanvas({ backgroundColor: "whitesmoke" }) // debugging
     
     // 
     // Main node updater
@@ -252,6 +317,6 @@ const { html } = Elemental({
 document.body = html`
     <body font-size=15px background-color=whitesmoke overflow=none width=100vw height=100vh overflow=hidden>
         ${globalThis.canvasElement}
-        <Node label="A" x=100 y=100></Node>
     </body>
 `
+        // <Node label="A" x=100 y=100></Node>
