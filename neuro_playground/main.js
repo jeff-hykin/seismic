@@ -11,10 +11,15 @@ import { makeDraggable } from "./generic_tools.js"
 import { Event, trigger, everyTime, once } from "https://esm.sh/gh/jeff-hykin/good-js@1.14.3.3/source/events.js"
 import { pointsToFunction } from "https://esm.sh/gh/jeff-hykin/good-js@1.14.3.3/source/flattened/points_to_function.js"
 import { fabric, FabricCanvas } from "./fabric.js"
-import { NodeCanvas } from "./node_canvas.js"
+import { NodeCanvas, FabricNode } from "./node_canvas.js"
 import { TimelineManager } from "./timeline_manager.js"
 import { Button } from "./button.js"
 globalThis.fabric = fabric // debugging
+
+// goals
+    // pulse animation
+    // node visual connections
+    // infinite pan and zoom canvas
 
 // 
 // node
@@ -126,7 +131,87 @@ globalThis.fabric = fabric // debugging
         stableEnergyLevel: 0.1,
     })
     
-    const canvasElement = NodeCanvas({ backgroundColor: "whitesmoke" })
+    const canvasElement = NodeCanvas({ backgroundColor: "whitesmoke", jsonObjects: {
+            // FIXME: debugging
+            "objects": [
+                // {
+                //     "type": "rect",
+                //     "left": 50,
+                //     "top": 50,
+                //     "width": 20,
+                //     "height": 20,
+                //     "fill": "green",
+                //     "overlayFill": null,
+                //     "stroke": null,
+                //     "strokeWidth": 1,
+                //     "strokeDashArray": null,
+                //     "scaleX": 1,
+                //     "scaleY": 1,
+                //     "angle": 0,
+                //     "flipX": false,
+                //     "flipY": false,
+                //     "opacity": 1,
+                //     "selectable": true,
+                //     "hasControls": true,
+                //     "hasBorders": true,
+                //     "hasRotatingPoint": false,
+                //     "transparentCorners": true,
+                //     "perPixelTargetFind": false,
+                //     "rx": 0,
+                //     "ry": 0
+                // },
+                // {
+                //     "type": "circle",
+                //     "left": 100,
+                //     "top": 100,
+                //     "width": 100,
+                //     "height": 100,
+                //     "fill": "red",
+                //     "overlayFill": null,
+                //     "stroke": "rgba(100,200,200)",
+                //     "strokeWidth": 5,
+                //     "strokeDashArray": null,
+                //     "scaleX": 1,
+                //     "scaleY": 1,
+                //     "angle": 0,
+                //     "flipX": false,
+                //     "flipY": false,
+                //     "opacity": 1,
+                //     "selectable": true,
+                //     "hasControls": true,
+                //     "hasBorders": true,
+                //     "hasRotatingPoint": false,
+                //     "transparentCorners": true,
+                //     "perPixelTargetFind": false,
+                //     "radius": 50
+                // },
+                new FabricNode({
+                    id: "node-1",
+                    label: "A", 
+                    left:300, 
+                    top:300, 
+                    radius:50, 
+                    spikeThreshold:1,
+                    startingEnergy:0, 
+                    energyDecayRate:0.1,
+                }),
+                new FabricNode({
+                    id: "node-2",
+                    label: "A", 
+                    left:500, 
+                    top:300, 
+                    radius:50, 
+                    spikeThreshold:1,
+                    startingEnergy:0, 
+                    energyDecayRate:0.1,
+                    outputNodeIds: [
+                        "node-1" 
+                    ],
+                }),
+            ],
+            // "background": "rgba(0, 0, 0, 0)",
+        }
+    })
     globalThis.canvasElement = canvasElement // debugging
     
     // 

@@ -3,6 +3,10 @@ import { fabric, FabricCanvas } from "./fabric.js"
 import { pointsToFunction } from "https://esm.sh/gh/jeff-hykin/good-js@1.14.3.3/source/flattened/points_to_function.js"
 import { TimelineManager } from "./timeline_manager.js"
 
+function getCenter(node) {
+    const { left, top, width, height } = node.getBoundingRect()
+    return { left: left + width / 2, top: top + height / 2 }
+}
 
 const hslBlueHue = 213
 const hslYellowHue = 49
@@ -31,7 +35,7 @@ export class FabricNode extends fabric.Circle {
     static get type() {
         return "FabricNode";
     }
-    constructor({ label, left=100, top=100, radius=50, spikeThreshold=1, startingEnergy=0, energyDecayRate=0.1, id, outputNodeIds, inputNodeIds, ...custom }) {
+    constructor({ label, left=100, top=100, radius=50, spikeThreshold=1, startingEnergy=0, energyDecayRate=0.1, id, outputNodeIds=[], inputNodeIds=[], ...custom }) {
         super({
             radius,
             "startAngle": 0,
@@ -68,6 +72,7 @@ export class FabricNode extends fabric.Circle {
             "globalCompositeOperation": "source-over",
             "skewX": 0,
             "skewY": 0,
+            objectCaching: false,
             ...custom,
         })
         Object.assign(this, {
@@ -81,6 +86,30 @@ export class FabricNode extends fabric.Circle {
             willFireNextTimestepBecauseClick: false,
         })
         allNodes.set(this.id, new WeakRef(this))
+        this.updateInputOutputConnections()
+    }
+    updateInputOutputConnections() {
+        // if something is listed as an output, make the other node knows it is an input
+        for (let each of this.outputNodeIds) {
+            if (allNodes.has(each)) {
+                const value = allNodes.get(each).deref()
+                if (value) {
+                    value.inputNodeIds.includes(this.id) || value.inputNodeIds.push(this.id)
+                } else {
+                    allNodes.delete(each)
+                }
+            }
+        }
+        for (let each of this.inputNodeIds) {
+            if (allNodes.has(each)) {
+                const value = allNodes.get(each).deref()
+                if (value) {
+                    value.outputNodeIds.includes(this.id) || value.outputNodeIds.push(this.id)
+                } else {
+                    allNodes.delete(each)
+                }
+            }
+        }
     }
     get outputs() {
         let outputs = [] 
@@ -124,6 +153,49 @@ export class FabricNode extends fabric.Circle {
 }
 fabric.classRegistry.setClass(FabricNode)
 
+export class FabricLine extends fabric.Path {
+    static get type() {
+        return "FabricLine";
+    }
+    // TODO: somehow clean up lines
+    constructor({ startNodeId, endNodeId, ...custom }) {
+        let startTop=0, startLeft=0, endTop=0, endLeft=0
+        try {
+            const { left: startLeft, top: startTop } = getCenter(allNodes.get(startNodeId).deref())
+        } catch (error) {
+            console.error(`error getting startNodeId center for line with startNodeId ${startNodeId}`, error)
+        }
+        try {
+            const { left: endLeft, top: endTop } = getCenter(allNodes.get(endNodeId).deref())
+        } catch (error) {
+            console.error(`error getting endNodeId center for line with endNodeId ${endNodeId}`, error)
+        }
+        let controlTop = (startTop + endTop)/2
+        let controlLeft = (startLeft + endLeft)/2
+        super(`M ${startX} ${startY} C ${controlX} ${controlY}, ${controlX} ${controlY}, ${endX} ${endY}`, {
+            fill: '', 
+            stroke: 'gray',
+            strokeWidth: 5,
+            ...custom,
+        })
+        // allNodes.set(this.id, new WeakRef(this))
+    }
+    toObject(propertiesToInclude) {
+        return {
+            ...super.toObject(propertiesToInclude),
+            id: this.id,
+            label: this.label,
+            spikeThreshold: this.spikeThreshold,
+            startingEnergy: this.startingEnergy,
+            energyDecayRate: this.energyDecayRate,
+            willFireNextTimestepBecauseClick: this.willFireNextTimestepBecauseClick,
+        }
+    }
+}
+fabric.classRegistry.setClass(FabricLine)
+
+let prevHoveNodeId
+const hoverLines = []
 // specific for nodes
 export function NodeCanvas({
     width,
@@ -132,6 +204,7 @@ export function NodeCanvas({
     selectionColor,
     selectionLineWidth,
     onceFabricLoads,
+    jsonObjects,
     // onMouseDown,
     // onObjectAdded,
     // onAfterRender,
@@ -161,8 +234,10 @@ export function NodeCanvas({
                 getCurrentState: ()=>canvas.toObject(),
                 loadState: (state)=>canvas.loadFromObject(state),
                 afterForwardsTimestep: ()=>{
+                    console.log(`afterForwardsTimestep`)
                     for (let each of canvas.objects) {
                         if (each.type === FabricNode.type.toLowerCase()) {
+                            console.log(`found node:`,each)
                             if (each.willFireNextTimestepBecauseClick) {
                                 console.debug(`each.outputs is:`,each.outputs)
                                 each.willFireNextTimestepBecauseClick = false
@@ -173,93 +248,77 @@ export function NodeCanvas({
                     canvas.renderAll()
                 },
             })
-            console.debug(`element.timelineManager is:`,element.timelineManager)
-            console.debug(`element is:`,element)
             globalThis.canvas = canvas // debugging only
             // TODO: add pan/zoom
             onceFabricLoads&&onceFabricLoads(canvas)
         },
         ...props,
+        onMouseMove: (event)=>{
+            const { target } = event
+            // clear previous
+            let idBefore = prevHoveNodeId
+            let hoverLinesBefore = [...hoverLines]
+            for (let each of hoverLinesBefore) {
+                canvas.remove(each)
+            }
+            hoverLines.length = 0
+            prevHoveNodeId = null
+
+            if (target) {
+                const isHoveringANode = target.type === FabricNode.type.toLowerCase()
+                if (isHoveringANode) {
+                    const actualTarget = canvas.objects.filter(each=>each.id===target.id)[0]
+                    if (actualTarget) {
+                        prevHoveNodeId = actualTarget.id
+                        for (let each of actualTarget.outputs) {
+                            const line = new fabric.Line([...Object.values(getCenter(target)), ...Object.values(getCenter(each))], {
+                                objectCaching: false,
+                                stroke: 'red',
+                                strokeWidth: 5,
+                                selectable: false,
+                            })
+                            hoverLines.push(line)
+                            canvas.add(line)
+                            canvas.add(each) // to draw on top of the line
+                        }
+                        
+                        for (let each of actualTarget.inputs) {
+                            const line = new fabric.Line([...Object.values(getCenter(target)), ...Object.values(getCenter(each))], {
+                                objectCaching: false,
+                                stroke: 'blue',
+                                strokeWidth: 5,
+                                selectable: false,
+                            })
+                            hoverLines.push(line)
+                            canvas.add(line)
+                            canvas.add(each) // to draw on top of the line
+                        }
+                        canvas.add(target) // to draw on top of the line
+                    }
+                }
+            }
+        },
         onMouseDown: (event)=>{
             const { target } = event
             if (target) {
                 if (target.type === FabricNode.type.toLowerCase()) {
-                    console.debug(`fabric node target is:`,target)
-                    console.debug(`scheduling fire event`)
-                    element.timelineManager.scheduleTask(()=>{
-                        target.willFireNextTimestepBecauseClick = true
-                        console.debug(`target.willFireNextTimestepBecauseClick is:`,target.willFireNextTimestepBecauseClick)
-                    })
+                    // TODO: for some reason even .set(key, value) doesn't "stick" when getting the same value inside of afterForwardsTimestep
+                    // this is a workaround for that, and eventually this workaround should be removed
+                    const actualTarget = canvas.objects.filter(each=>each.id===target.id)[0]
+                    if (actualTarget) {
+                        element.timelineManager.scheduleTask(()=>{
+                            globalThis.target = target
+                            target.set("willFireNextTimestepBecauseClick", true)
+                            actualTarget.willFireNextTimestepBecauseClick = true
+                            // target.willFireNextTimestepBecauseClick = true
+                            console.debug(`target.willFireNextTimestepBecauseClick is:`,target.willFireNextTimestepBecauseClick)
+                        })
+                    }
                 }
                 console.debug(`target is:`,target)
             }
         },
-        jsonObjects: {
-            // FIXME: debugging
-            "objects": [
-                {
-                    "type": "rect",
-                    "left": 50,
-                    "top": 50,
-                    "width": 20,
-                    "height": 20,
-                    "fill": "green",
-                    "overlayFill": null,
-                    "stroke": null,
-                    "strokeWidth": 1,
-                    "strokeDashArray": null,
-                    "scaleX": 1,
-                    "scaleY": 1,
-                    "angle": 0,
-                    "flipX": false,
-                    "flipY": false,
-                    "opacity": 1,
-                    "selectable": true,
-                    "hasControls": true,
-                    "hasBorders": true,
-                    "hasRotatingPoint": false,
-                    "transparentCorners": true,
-                    "perPixelTargetFind": false,
-                    "rx": 0,
-                    "ry": 0
-                },
-                {
-                    "type": "circle",
-                    "left": 100,
-                    "top": 100,
-                    "width": 100,
-                    "height": 100,
-                    "fill": "red",
-                    "overlayFill": null,
-                    "stroke": "rgba(100,200,200)",
-                    "strokeWidth": 5,
-                    "strokeDashArray": null,
-                    "scaleX": 1,
-                    "scaleY": 1,
-                    "angle": 0,
-                    "flipX": false,
-                    "flipY": false,
-                    "opacity": 1,
-                    "selectable": true,
-                    "hasControls": true,
-                    "hasBorders": true,
-                    "hasRotatingPoint": false,
-                    "transparentCorners": true,
-                    "perPixelTargetFind": false,
-                    "radius": 50
-                },
-                new FabricNode({
-                    label: "A", 
-                    left:300, 
-                    top:300, 
-                    radius:50, 
-                    spikeThreshold:1,
-                    startingEnergy:0, 
-                    energyDecayRate:0.1,
-                })
-            ],
-            // "background": "rgba(0, 0, 0, 0)",
-        }
+        jsonObjects,
     })
 }
 
