@@ -2,10 +2,29 @@ import { Elemental, passAlongProps } from "https://esm.sh/gh/jeff-hykin/elementa
 import { fabric, FabricCanvas } from "./fabric.js"
 import { pointsToFunction } from "https://esm.sh/gh/jeff-hykin/good-js@1.14.3.3/source/flattened/points_to_function.js"
 import { TimelineManager } from "./timeline_manager.js"
+import { linearSteps } from "https://esm.sh/gh/jeff-hykin/good-js@1.14.3.3/source/flattened/linear_steps.js"
+import { zipLong as zip } from "https://esm.sh/gh/jeff-hykin/good-js@1.14.3.3/source/flattened/zip_long.js"
 
 function getCenter(node) {
     const { left, top, width, height } = node.getBoundingRect()
     return { left: left + width / 2, top: top + height / 2 }
+}
+function easeInOutQuad(currentTime, startValue, changeInValue, duration) {
+    currentTime /= duration / 2
+    if (currentTime < 1) {
+        return (changeInValue / 2) * currentTime * currentTime + startValue
+    }
+    currentTime--
+    return (-changeInValue / 2) * (currentTime * (currentTime - 2) - 1) + startValue
+}
+function duplicateAnimationUpThenDown({start, end, steps}) {
+    let values = linearSteps({ start, end, quantity: Math.floor(steps/2),})
+    // up then down
+    values = values.concat(values.toReversed().slice(1))
+    // deal with off by one edgecases
+    values.push(start)
+    values = values.slice(0, steps)
+    return values
 }
 
 const hslBlueHue = 213
@@ -43,14 +62,12 @@ export class FabricNode extends fabric.Circle {
             "counterClockwise": false,
             "type": "Circle",
             "version": "6.6.1",
-            "originX": "left",
-            "originY": "top",
             left,
             top,
             // "width": 100,
             // "height": 100,
             "fill": `hsl(${hslBlueHue}, 100%, 50%)`,
-            "stroke": "lightgray",
+            "stroke": "hsl(0, 0%, 82.75%)",
             "strokeWidth": 5,
             "strokeDashArray": null,
             "strokeLineCap": "butt",
@@ -72,6 +89,8 @@ export class FabricNode extends fabric.Circle {
             "globalCompositeOperation": "source-over",
             "skewX": 0,
             "skewY": 0,
+            originX: 'center',  // Set origin to center on the X axis
+            originY: 'center',  // Set origin to center on the Y axis
             objectCaching: false,
             ...custom,
         })
@@ -237,6 +256,65 @@ export function NodeCanvas({
     // 
     // helpers
     // 
+        let canvas
+        const pulse = async (node)=>{
+            if (node.stroke.includes('hsl')) {
+                console.log(`has hsl`)
+                const eachNode = allNodes.get(node.id).deref()
+                if (eachNode) {
+                    const halfAnimationDuration = 200
+                    
+                    const colorValues = [...node.stroke.match(/\d+/g)].map(each=>each-0)
+                    const startHue = colorValues[0]
+                    const endHue = hslRedHue
+                    const startLightness = colorValues[1]
+                    const endLightness = 100
+                    const startSaturation = colorValues[2]
+                    const endSaturation = 50
+                    const startRadius = node.radius
+                    const endRadius = node.radius*1.2
+                    
+                    // 
+                    // ramp up
+                    //
+                    let start = Date.now()
+                    let end = start + halfAnimationDuration
+                    let now
+                    while ((now=Date.now()) < end) {
+                        await new Promise((resolve)=>setTimeout(resolve, 0))
+                        const newHue = easeInOutQuad(now-start, startHue, endHue-startHue, halfAnimationDuration)
+                        const newLightness = easeInOutQuad(now-start, startLightness, endLightness-startLightness, halfAnimationDuration)
+                        const newSaturation = easeInOutQuad(now-start, startSaturation, endSaturation-startSaturation, halfAnimationDuration)
+                        const newRadius = easeInOutQuad(now-start, startRadius, endRadius-startRadius, halfAnimationDuration)
+                        const color = `hsl(${newHue}, ${newLightness}%, ${newSaturation}%)`
+                        eachNode.set('stroke', color)
+                        eachNode.set('radius', newRadius)
+                        canvas.renderAll()
+                    }
+                    // 
+                    // ramp down
+                    // 
+                    start = Date.now()
+                    end = Date.now() + halfAnimationDuration
+                    while ((now=Date.now()) < end) {
+                        await new Promise((resolve)=>setTimeout(resolve, 0))
+                        const newHue = easeInOutQuad(now-start, endHue, startHue-endHue, halfAnimationDuration)
+                        const newLightness = easeInOutQuad(now-start, endLightness, startLightness-endLightness, halfAnimationDuration)
+                        const newSaturation = easeInOutQuad(now-start, endSaturation, startSaturation-endSaturation, halfAnimationDuration)
+                        const newRadius = easeInOutQuad(now-start, endRadius, startRadius-endRadius, halfAnimationDuration)
+                        const color = `hsl(${newHue}, ${newLightness}%, ${newSaturation}%)`
+                        eachNode.set('stroke', color)
+                        eachNode.set('radius', newRadius)
+                        canvas.renderAll()
+                    }
+                }
+            }
+            // node.animate('fill', `hsl(${hslRedHue}, 100%, 50%)`, {
+            //     onChange: canvas.renderAll.bind(canvas),
+            //     duration: 1000,
+            //     easing: fabric.util.ease.easeOutBounce
+            // })
+        }
         let prevHoveNodeId
         const hoverLines = []
         const showConnectionsOf = (target)=>{
@@ -285,7 +363,8 @@ export function NodeCanvas({
         backgroundColor,
         selectionColor,
         selectionLineWidth,
-        onceFabricLoads:(canvas)=>{
+        onceFabricLoads:(fabricCanvas)=>{
+            canvas = fabricCanvas
             element.timelineManager = new TimelineManager({
                 getCurrentState: ()=>canvas.toObject(),
                 loadState: (state)=>canvas.loadFromObject(state),
@@ -293,7 +372,7 @@ export function NodeCanvas({
                     for (let each of canvas.objects) {
                         if (each.type === FabricNode.type.toLowerCase()) {
                             if (each.willFireNextTimestepBecauseClick) {
-                                console.debug(`each.outputs is:`,each.outputs)
+                                pulse(each)
                                 each.willFireNextTimestepBecauseClick = false
                                 // each.energy += 
                             }
