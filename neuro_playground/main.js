@@ -1,5 +1,5 @@
 import { Elemental, passAlongProps } from "https://esm.sh/gh/jeff-hykin/elemental@0.6.5/main/deno.js"
-import { css, components, Column, Row, askForFiles, Code, Input, Button, Checkbox, Dropdown, popUp, cx, } from "https://esm.sh/gh/jeff-hykin/good-component@0.3.0/elements.js"
+import { css, components, Column, Row, askForFiles, Code, Input, Checkbox, Dropdown, popUp, cx, } from "https://esm.sh/gh/jeff-hykin/good-component@0.3.0/elements.js"
 import { fadeIn, fadeOut } from "https://esm.sh/gh/jeff-hykin/good-component@0.3.0/main/animations.js"
 import { showToast } from "https://esm.sh/gh/jeff-hykin/good-component@0.3.0/main/actions.js"
 import { addDynamicStyleFlags, setupStyles, createCssClass, setupClassStyles, hoverStyleHelper, combineClasses, mergeStyles, AfterSilent, removeAllChildElements } from "https://esm.sh/gh/jeff-hykin/good-component@0.3.0/main/helpers.js"
@@ -11,6 +11,9 @@ import { makeDraggable } from "./generic_tools.js"
 import { Event, trigger, everyTime, once } from "https://esm.sh/gh/jeff-hykin/good-js@1.14.3.3/source/events.js"
 import { pointsToFunction } from "https://esm.sh/gh/jeff-hykin/good-js@1.14.3.3/source/flattened/points_to_function.js"
 import { fabric, FabricCanvas } from "./fabric.js"
+import { NodeCanvas } from "./node_canvas.js"
+import { TimelineManager } from "./timeline_manager.js"
+import { Button } from "./button.js"
 globalThis.fabric = fabric // debugging
 
 // 
@@ -123,172 +126,8 @@ globalThis.fabric = fabric // debugging
         stableEnergyLevel: 0.1,
     })
     
-    class FabricNode extends fabric.Circle {
-        static get type() {
-            return "FabricNode";
-        }
-        constructor({ label, left=100, top=100, radius=50, spikeThreshold=1, startingEnergy=0, energyDecayRate=0.1, id, ...custom }) {
-            super({
-                radius,
-                "startAngle": 0,
-                "endAngle": 360,
-                "counterClockwise": false,
-                "type": "Circle",
-                "version": "6.6.1",
-                "originX": "left",
-                "originY": "top",
-                left,
-                top,
-                // "width": 100,
-                // "height": 100,
-                "fill": `hsl(${hslBlueHue}, 100%, 50%)`,
-                "stroke": "lightgray",
-                "strokeWidth": 5,
-                "strokeDashArray": null,
-                "strokeLineCap": "butt",
-                "strokeDashOffset": 0,
-                "strokeLineJoin": "miter",
-                "strokeUniform": false,
-                "strokeMiterLimit": 4,
-                "scaleX": 1,
-                "scaleY": 1,
-                "angle": 0,
-                "flipX": false,
-                "flipY": false,
-                "opacity": 1,
-                "shadow": null,
-                "visible": true,
-                "backgroundColor": "",
-                "fillRule": "nonzero",
-                "paintFirst": "fill",
-                "globalCompositeOperation": "source-over",
-                "skewX": 0,
-                "skewY": 0,
-                ...custom,
-            })
-            Object.assign(this, {
-                id: id||`${Math.random()}`,
-                label,
-                spikeThreshold,
-                startingEnergy,
-                energyDecayRate,
-            })
-        }
-        toObject(propertiesToInclude) {
-            return {
-                ...super.toObject(propertiesToInclude),
-                id: this.id,
-                label: this.label,
-                spikeThreshold: this.spikeThreshold,
-                startingEnergy: this.startingEnergy,
-                energyDecayRate: this.energyDecayRate,
-            }
-        }
-    }
-    fabric.classRegistry.setClass(FabricNode)
-    
-    // specific for nodes
-    function NodeCanvas({
-        width,
-        height,
-        backgroundColor,
-        selectionColor,
-        selectionLineWidth,
-        onceFabricLoads,
-        // onMouseDown,
-        // onObjectAdded,
-        // onAfterRender,
-        // onMouseMove,
-        // onMouseUp,
-        // onBeforeSelection,
-        // onSelectionCreated,
-        // onSelectionCleared,
-        // onObjectModified,
-        // onObjectSelected,
-        // onObjectMoving,
-        // onObjectScaling,
-        // onObjectRotating,
-        // onObjectRemoved,
-        ...props
-    }={}) {
-        return FabricCanvas({
-            width,
-            height,
-            backgroundColor,
-            selectionColor,
-            selectionLineWidth,
-            onceFabricLoads:(canvas)=>{
-                globalThis.canvas = canvas // debugging only
-                // TODO: add pan/zoom
-                onceFabricLoads&&onceFabricLoads(canvas)
-            },
-            ...props,
-            onMouseDown: (event)=>{
-                const { target } = event
-                if (target) {
-                    console.debug(`target is:`,target)
-                }
-            },
-            jsonObjects: {
-                "objects": [
-                    {
-                        "type": "rect",
-                        "left": 50,
-                        "top": 50,
-                        "width": 20,
-                        "height": 20,
-                        "fill": "green",
-                        "overlayFill": null,
-                        "stroke": null,
-                        "strokeWidth": 1,
-                        "strokeDashArray": null,
-                        "scaleX": 1,
-                        "scaleY": 1,
-                        "angle": 0,
-                        "flipX": false,
-                        "flipY": false,
-                        "opacity": 1,
-                        "selectable": true,
-                        "hasControls": true,
-                        "hasBorders": true,
-                        "hasRotatingPoint": false,
-                        "transparentCorners": true,
-                        "perPixelTargetFind": false,
-                        "rx": 0,
-                        "ry": 0
-                    },
-                    {
-                        "type": "circle",
-                        "left": 100,
-                        "top": 100,
-                        "width": 100,
-                        "height": 100,
-                        "fill": "red",
-                        "overlayFill": null,
-                        "stroke": "rgba(100,200,200)",
-                        "strokeWidth": 5,
-                        "strokeDashArray": null,
-                        "scaleX": 1,
-                        "scaleY": 1,
-                        "angle": 0,
-                        "flipX": false,
-                        "flipY": false,
-                        "opacity": 1,
-                        "selectable": true,
-                        "hasControls": true,
-                        "hasBorders": true,
-                        "hasRotatingPoint": false,
-                        "transparentCorners": true,
-                        "perPixelTargetFind": false,
-                        "radius": 50
-                    },
-                    (new FabricNode({ label: "A", x:100, y:100, size:50, spikeThreshold:1, startingEnergy:0, energyDecayRate:0.1 })).toObject(),
-                ],
-                // "background": "rgba(0, 0, 0, 0)",
-            }
-        })
-    }
-    globalThis.canvasElement = NodeCanvas({ backgroundColor: "whitesmoke" }) // debugging
+    const canvasElement = NodeCanvas({ backgroundColor: "whitesmoke" })
+    globalThis.canvasElement = canvasElement // debugging
     
     // 
     // Main node updater
@@ -306,17 +145,33 @@ globalThis.fabric = fabric // debugging
     }, Node.updateInterval)
 
 
-
-
 const { html } = Elemental({
     ...components,
     Node,
     FabricCanvas,
+    Column, Row, askForFiles, Code, Input, Button, Checkbox, Dropdown,
 })
 
 document.body = html`
     <body font-size=15px background-color=whitesmoke overflow=none width=100vw height=100vh overflow=hidden>
-        ${globalThis.canvasElement}
+        ${canvasElement}
+        <Button
+            style=${{position: "fixed", right: "10px", bottom: "10px"}}
+            onclick=${async ()=>{
+                console.log(`canvasElement is:`,canvasElement)
+                if (!canvasElement.timelineManager) {
+                    showToast("Sorry the canvas is not yet loaded", {close: true})
+                    return
+                }
+                try {
+                    await canvasElement.timelineManager.goForward()
+                } catch (error) {
+                    console.error(`error during goForward:`, error)
+                }
+            }}
+            >
+                Next
+        </Button>
     </body>
 `
         // <Node label="A" x=100 y=100></Node>

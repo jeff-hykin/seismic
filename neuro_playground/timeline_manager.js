@@ -48,6 +48,8 @@ export class TimelineManager {
             }
         }
         const timestep = this.currentTimestep
+        // TODO: to make this a lot more memory efficient, there should be a technique for only keeping some of the previous states
+        // ideally the previous states should follow a logrigthmic curve, becoming more sparse the further back in time we go
         return Promise.all(possiblePromises).then(this.getCurrentState).then((saveState)=>{
             this._savedStates[timestep] = saveState
             if (this.afterForwardsTimestep) {
