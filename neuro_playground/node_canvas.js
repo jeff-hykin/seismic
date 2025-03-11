@@ -36,18 +36,6 @@ const energyToHue = pointsToFunction({
     areSorted: true,
     method: "linearInterpolation",
 })
-// const pulseAnimation = [
-//     [
-//         { transform: 'scale(1)', opacity: 1 },  // Initial state
-//         { transform: 'scale(1.2)', opacity: 0.8 }, // Pulsed state (enlarged and slightly faded)
-//         { transform: 'scale(1)', opacity: 1 },  // Back to original state
-//     ],
-//     {
-//         duration: 600,
-//         iterations: 1,
-//         easing: 'ease-in-out',
-//     }
-// ]
 
 const allNodes = new Map()
 export class FabricNode extends fabric.Circle {
@@ -219,6 +207,7 @@ export class FabricLine extends fabric.Path {
 fabric.classRegistry.setClass(FabricLine)
 
 // specific for nodes
+let prevMouseDownTime
 export function NodeCanvas({
     width,
     height,
@@ -257,12 +246,18 @@ export function NodeCanvas({
     // helpers
     // 
         let canvas
+        const activeAnimations = new Set()
         const pulse = async (node)=>{
             if (node.stroke.includes('hsl')) {
-                console.log(`has hsl`)
+                if (activeAnimations.has(node.id)) {
+                    return
+                }
+                activeAnimations.add(node.id)
                 const eachNode = allNodes.get(node.id).deref()
                 if (eachNode) {
                     const halfAnimationDuration = 200
+                    const originalColor = node.stroke
+                    const originalRadius = node.radius
                     
                     const colorValues = [...node.stroke.match(/\d+/g)].map(each=>each-0)
                     const startHue = colorValues[0]
@@ -307,7 +302,12 @@ export function NodeCanvas({
                         eachNode.set('radius', newRadius)
                         canvas.renderAll()
                     }
+                    // ensure nothing gets messed up
+                    eachNode.set('stroke', originalColor)
+                    eachNode.set('radius', originalRadius)
+                    canvas.renderAll()
                 }
+                activeAnimations.delete(node.id)
             }
             // node.animate('fill', `hsl(${hslRedHue}, 100%, 50%)`, {
             //     onChange: canvas.renderAll.bind(canvas),
@@ -372,9 +372,7 @@ export function NodeCanvas({
                     for (let each of canvas.objects) {
                         if (each.type === FabricNode.type.toLowerCase()) {
                             if (each.willFireNextTimestepBecauseClick) {
-                                pulse(each)
                                 each.willFireNextTimestepBecauseClick = false
-                                // each.energy += 
                             }
                         }
                     }
@@ -391,23 +389,30 @@ export function NodeCanvas({
             showConnectionsOf(target)
         },
         onMouseDown: (event)=>{
+            prevMouseDownTime = Date.now()
             const { target } = event
             if (target) {
                 if (target.type === FabricNode.type.toLowerCase()) {
-                    // TODO: for some reason even .set(key, value) doesn't "stick" when getting the same value inside of afterForwardsTimestep
-                    // this is a workaround for that, and eventually this workaround should be removed
-                    const actualTarget = canvas.objects.filter(each=>each.id===target.id)[0]
-                    if (actualTarget) {
+                    
+                }
+            }
+        },
+        onMouseUp: (event)=>{
+            const countsAsAClick = Date.now()-prevMouseDownTime < 100
+            if (countsAsAClick) {
+                console.debug(`countsAsAClick is:`,countsAsAClick)
+                const { target } = event
+                if (target) {
+                    if (target.type === FabricNode.type.toLowerCase()) {
+                        pulse(target)
+                        // TODO: for some reason even .set(key, value) doesn't "stick" when getting the same value inside of afterForwardsTimestep
+                        // this is a workaround for that, and eventually this workaround should be removed
+                        const actualTarget = canvas.objects.filter(each=>each.id===target.id)[0]
                         element.timelineManager.scheduleTask(()=>{
-                            globalThis.target = target
-                            target.set("willFireNextTimestepBecauseClick", true)
                             actualTarget.willFireNextTimestepBecauseClick = true
-                            // target.willFireNextTimestepBecauseClick = true
-                            console.debug(`target.willFireNextTimestepBecauseClick is:`,target.willFireNextTimestepBecauseClick)
                         })
                     }
                 }
-                console.debug(`target is:`,target)
             }
         },
         jsonObjects,
