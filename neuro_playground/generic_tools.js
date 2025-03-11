@@ -1,7 +1,7 @@
 export function makeDraggable(element, {onDrag=({isStart, isEnd, x, y})=>{}, itsPositionedCorrectlyIPromise=false}={}) {
     if (!itsPositionedCorrectlyIPromise) {
         const computedStyle = window.getComputedStyle(element)
-        const positioning = computedStyle.position
+        const positioning = computedStyle.getPropertyValue("position") 
         if (positioning != "absolute" && positioning != "relative" && positioning != "fixed") {
             throw Error(`[from makeDraggable] Element ${element} is does not have a style.position that is absolute, relative, or fixed. It is positioned ${positioning}.`)
         }
