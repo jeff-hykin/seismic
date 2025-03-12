@@ -30,19 +30,31 @@ function duplicateAnimationUpThenDown({start, end, steps}) {
 const hslBlueHue = 213
 const hslYellowHue = 49
 const hslRedHue = 14
-const energyToHue = pointsToFunction({
+const energyToHueBase = pointsToFunction({
     xValues: [0, 1],
     yValues: [hslBlueHue, hslYellowHue],
     areSorted: true,
     method: "linearInterpolation",
 })
+const energyToHue = (energy)=>{
+    let hue = energyToHueBase(energy)
+    // dumb, yes, but JS doesn't have a modulo operator (it has a remainder operator)
+    while (hue < 0) {
+        hue += 255 // probably only ever does 1 iteration
+    }
+    return hue % 255 // remainder operator (same as modulo for positive numbers)
+}
 
 const allNodes = new Map()
+globalThis.allNodes = allNodes // debugging
+const getAllNodes = ()=>{
+    return Array.from(allNodes.values()).map(each=>each.deref()).filter(each=>each)
+}
 export class FabricNode extends fabric.Circle {
     static get type() {
         return "FabricNode";
     }
-    constructor({ label, left=100, top=100, radius=50, spikeThreshold=1, energy=0, energyDecayRate=0.1, id, outputNodeMapping=[], inputNodeIds=[], isFiring=false, willFireNextTimestepBecauseClick=false, stableEnergyLevel=0.1, energyAfterFiring=0, ...custom }) {
+    constructor({ label, left=100, top=100, radius=50, spikeThreshold=1, energy=0.1, energyDecayRate=0.1, id, outputNodeMapping=[], inputNodeIds=[], isFiring=false, stableEnergyLevel=0.1, energyAfterFiring=0, ...custom }) {
         super({
             radius,
             "startAngle": 0,
@@ -54,7 +66,7 @@ export class FabricNode extends fabric.Circle {
             top,
             // "width": 100,
             // "height": 100,
-            "fill": `hsl(${hslBlueHue}, 100%, 50%)`,
+            "fill": `hsl(${energyToHue(energy)}, 100%, 50%)`,
             "stroke": "hsl(0, 0%, 82.75%)",
             "strokeWidth": 5,
             "strokeDashArray": null,
@@ -96,7 +108,6 @@ export class FabricNode extends fabric.Circle {
             outputNodeMapping,
             inputNodeIds,
             isFiring,
-            willFireNextTimestepBecauseClick,
             stableEnergyLevel,
             energyAfterFiring,
         })
@@ -155,7 +166,6 @@ export class FabricNode extends fabric.Circle {
             isFiring: this.isFiring,
             outputNodeMapping: this.outputNodeMapping,
             inputNodeIds: this.inputNodeIds,
-            willFireNextTimestepBecauseClick: this.willFireNextTimestepBecauseClick,
             stableEnergyLevel: this.stableEnergyLevel,
             energyAfterFiring: this.energyAfterFiring,
         }
@@ -198,7 +208,6 @@ export class FabricLine extends fabric.Path {
             spikeThreshold: this.spikeThreshold,
             energy: this.energy,
             energyDecayRate: this.energyDecayRate,
-            willFireNextTimestepBecauseClick: this.willFireNextTimestepBecauseClick,
         }
     }
 }
@@ -312,11 +321,6 @@ export function NodeCanvas({
                 }
                 activeAnimations.delete(node.id)
             }
-            // node.animate('fill', `hsl(${hslRedHue}, 100%, 50%)`, {
-            //     onChange: canvas.renderAll.bind(canvas),
-            //     duration: 1000,
-            //     easing: fabric.util.ease.easeOutBounce
-            // })
         }
         let prevHoveNodeId
         const hoverLines = []
@@ -333,7 +337,7 @@ export function NodeCanvas({
             if (target) {
                 const isHoveringANode = target.type === FabricNode.type.toLowerCase()
                 if (isHoveringANode) {
-                    const actualTarget = canvas.objects.filter(each=>each.id===target.id)[0]
+                    const actualTarget = getAllNodes().filter(each=>each.id===target.id)[0]
                     if (actualTarget) {
                         prevHoveNodeId = actualTarget.id
                         for (let each of actualTarget.outputs) {
@@ -370,7 +374,7 @@ export function NodeCanvas({
                 loadState: (state)=>canvas.loadFromObject(state),
                 afterForwardsTimestep: ()=>{
                     const nodes = {}
-                    for (let each of canvas.objects) {
+                    for (let each of getAllNodes()) {
                         if (each.type === FabricNode.type.toLowerCase()) {
                             nodes[each.id] = each
                         }
@@ -401,24 +405,20 @@ export function NodeCanvas({
                     // discover what new nodes are firing
                     for (let each of Object.values(nodes)) {
                         const isAboveThreshold = each.energy >= each.spikeThreshold
-                        const fired = isAboveThreshold||each.willFireNextTimestepBecauseClick
-                        if (fired) {
-                            if (!each.willFireNextTimestepBecauseClick) {
-                                pulse(each)
-                                for (const [id, relationship] of Object.entries(each.outputNodeMapping)) {
-                                    nodes[id].energy += relationship
-                                    
-                                    console.debug(`each is:${JSON.stringify({top: each.top, left: each.left, id: each.id})}`)
-                                    // show line briefly
-                                    const line = new fabric.Line([...Object.values(getCenter(each)), ...Object.values(getCenter(nodes[id]))], {
-                                        objectCaching: false,
-                                        ...outputConnectionStyles,
-                                    })
-                                    lines.push(line)
-                                    canvas.insertAt(0, line)
-                                }
+                        if (isAboveThreshold) {
+                            pulse(each)
+                            for (const [id, relationship] of Object.entries(each.outputNodeMapping)) {
+                                nodes[id].energy += relationship
+                                
+                                console.debug(`each is:${JSON.stringify({top: each.top, left: each.left, id: each.id})}`)
+                                // show line briefly
+                                const line = new fabric.Line([...Object.values(getCenter(each)), ...Object.values(getCenter(nodes[id]))], {
+                                    objectCaching: false,
+                                    ...outputConnectionStyles,
+                                })
+                                lines.push(line)
+                                canvas.insertAt(0, line)
                             }
-                            each.willFireNextTimestepBecauseClick = false
                             each.isFiring = true
                         }
                     }
@@ -440,6 +440,7 @@ export function NodeCanvas({
                     
                     // update color based on energy
                     for (let each of Object.values(nodes)) {
+                        console.debug(`hsl(${energyToHue(each.energy)}, 100%, 50%)`)
                         each.set('fill', `hsl(${energyToHue(each.energy)}, 100%, 50%)`)
                     }
                     console.debug(`nodes is:`,Object.fromEntries(Object.entries(nodes).map(([id, node])=>[id, node.energy])))
@@ -464,7 +465,7 @@ export function NodeCanvas({
             const { target } = event
             // not sure why this is needed, but it is (some sort of caching issue with fabric.js) desyncs canvas.objects with the actual visual objects
             if (target?.id) {
-                const realObject = canvas.objects.filter(each=>each.id===target.id)[0]
+                const realObject = getAllNodes().filter(each=>each.id===target.id)[0]
                 Object.assign(realObject,target)
                 console.debug(`realObject is:${JSON.stringify({top: realObject.top, left: realObject.left, id: realObject.id, stroke: target.stroke})}`,)
             }
@@ -489,7 +490,10 @@ export function NodeCanvas({
                         pulse(target)
                         // TODO: for some reason even .set(key, value) doesn't "stick" when getting the same value inside of afterForwardsTimestep
                         // this is a workaround for that, and eventually this workaround should be removed
-                        const actualTarget = canvas.objects.filter(each=>each.id===target.id)[0]
+                        const actualTarget = getAllNodes().filter(each=>each.id===target.id)[0]
+                        // show its prepped
+                        actualTarget.set('fill', `hsl(${energyToHue(1)}, 100%, 50%)`)
+                        canvas.renderAll()
                         element.timelineManager.scheduleTask(()=>{
                             // actualTarget.willFireNextTimestepBecauseClick = true
                             actualTarget.energy += 1
