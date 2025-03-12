@@ -362,7 +362,7 @@ export function NodeCanvas({
                 }
             }
         }
-    return element = FabricCanvas({
+    element = FabricCanvas({
         width,
         height,
         backgroundColor,
@@ -503,6 +503,14 @@ export function NodeCanvas({
         },
         jsonObjects,
     })
+    
+    element.addEventListener("contextmenu", event=>{
+        event.preventDefault()
+        console.log(`contextmenu event is:`,event)
+        // TODO: get mouse position
+    })
+
+    return element
 }
 
 
