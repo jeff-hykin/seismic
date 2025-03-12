@@ -37,12 +37,13 @@ const energyToHueBase = pointsToFunction({
     method: "linearInterpolation",
 })
 const energyToHue = (energy)=>{
-    let hue = energyToHueBase(energy)
-    // dumb, yes, but JS doesn't have a modulo operator (it has a remainder operator)
-    while (hue < 0) {
-        hue += 255 // probably only ever does 1 iteration
+    if (energy>1) {
+        return hslRedHue
     }
-    return hue % 255 // remainder operator (same as modulo for positive numbers)
+    if (energy<0) {
+        return hslBlueHue
+    }
+    return energyToHueBase(energy)
 }
 
 const allNodes = new Map()
@@ -373,52 +374,48 @@ export function NodeCanvas({
                 getCurrentState: ()=>canvas.toObject(),
                 loadState: (state)=>canvas.loadFromObject(state),
                 afterForwardsTimestep: ()=>{
-                    const nodes = {}
-                    for (let each of getAllNodes()) {
-                        if (each.type === FabricNode.type.toLowerCase()) {
-                            nodes[each.id] = each
-                        }
-                    }
-                    
-                    console.debug(`nodes is:`,Object.fromEntries(Object.entries(nodes).map(([id, node])=>[id, node.energy])))
+                    const nodes = getAllNodes()
+                    console.debug(`node cycle start is:`,Object.fromEntries(nodes.map(each=>[each.id, each.energy])))
 
                     // collect energy from fired nodes
                     const lines = []
-                    for (let each of Object.values(nodes)) {
+                    for (let each of nodes) {
                         if (each.isFiring) {
                             for (const [id, relationship] of Object.entries(each.outputNodeMapping)) {
-                                nodes[id].energy += relationship
-                                console.debug(`each is:${JSON.stringify({top: each.top, left: each.left, id: each.id})}`)
+                                const node = allNodes.get(id).deref()
+                                if (node) {
+                                    node.energy += relationship
+                                }
                             }
                         }
                     }
-                    console.debug(`nodes is:`,Object.fromEntries(Object.entries(nodes).map(([id, node])=>[id, node.energy])))
+                    console.debug(`nodes after fired nodes (peak energy for all) is:`,Object.fromEntries(nodes.map(each=>[each.id, each.energy])))
 
                     // reset nodes that just fired
-                    for (let each of Object.values(nodes)) {
+                    for (let each of nodes) {
                         if (each.isFiring) {
                             each.energy = each.energyAfterFiring
                             each.isFiring = false
-                        }
-                    }
-                    
-                    // discover what new nodes are firing
-                    for (let each of Object.values(nodes)) {
-                        const isAboveThreshold = each.energy >= each.spikeThreshold
-                        if (isAboveThreshold) {
+                            
+                            // animate that its firing
                             pulse(each)
+                            // show lines briefly
                             for (const [id, relationship] of Object.entries(each.outputNodeMapping)) {
-                                nodes[id].energy += relationship
-                                
-                                console.debug(`each is:${JSON.stringify({top: each.top, left: each.left, id: each.id})}`)
-                                // show line briefly
-                                const line = new fabric.Line([...Object.values(getCenter(each)), ...Object.values(getCenter(nodes[id]))], {
+                                const line = new fabric.Line([...Object.values(getCenter(each)), ...Object.values(getCenter(allNodes.get(id).deref()))], {
                                     objectCaching: false,
                                     ...outputConnectionStyles,
                                 })
                                 lines.push(line)
                                 canvas.insertAt(0, line)
                             }
+                        }
+                    }
+                    
+                    // discover what new nodes are firing
+                    for (let each of nodes) {
+                        console.debug(`each before fire`,{id:each.id, energy:each.energy, spikeThreshold:each.spikeThreshold})
+                        const isAboveThreshold = each.energy >= each.spikeThreshold
+                        if (isAboveThreshold) {
                             each.isFiring = true
                         }
                     }
@@ -429,7 +426,7 @@ export function NodeCanvas({
                     }, 100)
                     
                     // account for decay
-                    for (let each of Object.values(nodes)) {
+                    for (let each of nodes) {
                         if (!each.isFiring) {
                             each.energy -= each.energyDecayRate
                             if (each.energy < each.stableEnergyLevel) {
@@ -439,11 +436,11 @@ export function NodeCanvas({
                     }
                     
                     // update color based on energy
-                    for (let each of Object.values(nodes)) {
-                        console.debug(`hsl(${energyToHue(each.energy)}, 100%, 50%)`)
+                    for (let each of nodes) {
+                        console.debug(`${each.id}: each.energy:${each.energy}, hsl(${energyToHue(each.energy)}, 100%, 50%)`)
                         each.set('fill', `hsl(${energyToHue(each.energy)}, 100%, 50%)`)
                     }
-                    console.debug(`nodes is:`,Object.fromEntries(Object.entries(nodes).map(([id, node])=>[id, node.energy])))
+                    console.debug(`node cycle end is:`,Object.fromEntries(nodes.map(each=>[each.id, each.energy])))
                     
                     canvas.renderAll()
                 },
@@ -490,14 +487,16 @@ export function NodeCanvas({
                         pulse(target)
                         // TODO: for some reason even .set(key, value) doesn't "stick" when getting the same value inside of afterForwardsTimestep
                         // this is a workaround for that, and eventually this workaround should be removed
-                        const actualTarget = getAllNodes().filter(each=>each.id===target.id)[0]
+                        const actualTarget = allNodes.get(target.id).deref()
+                        actualTarget.energy = actualTarget.spoikeThreshold
+                        actualTarget.isFiring = true
                         // show its prepped
                         actualTarget.set('fill', `hsl(${energyToHue(1)}, 100%, 50%)`)
                         canvas.renderAll()
-                        element.timelineManager.scheduleTask(()=>{
-                            // actualTarget.willFireNextTimestepBecauseClick = true
-                            actualTarget.energy += 1
-                        })
+                        // element.timelineManager.scheduleTask(()=>{
+                        //     // actualTarget.willFireNextTimestepBecauseClick = true
+                        //     actualTarget.energy += 1
+                        // })
                     }
                 }
             }

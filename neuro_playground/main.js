@@ -21,116 +21,6 @@ globalThis.fabric = fabric // debugging
     // node visual connections
     // infinite pan and zoom canvas
 
-// 
-// node
-// 
-    const hslBlueHue = 213
-    const hslYellowHue = 49
-    const hslRedHue = 14
-    const energyToHue = pointsToFunction({
-        xValues: [0, 1],
-        yValues: [hslBlueHue, hslYellowHue],
-        areSorted: true,
-        method: "linearInterpolation",
-    })
-    const pulseAnimation = [
-        [
-            { transform: 'scale(1)', opacity: 1 },  // Initial state
-            { transform: 'scale(1.2)', opacity: 0.8 }, // Pulsed state (enlarged and slightly faded)
-            { transform: 'scale(1)', opacity: 1 },  // Back to original state
-        ],
-        {
-            duration: 600,
-            iterations: 1,
-            easing: 'ease-in-out',
-        }
-    ]
-    function Node({ label, x, y, threshold=1, startingEnergy=0, energyDecayRate=0.1, onPositionChange, ...props }) {
-        const element = document.createElement("div")
-        Object.assign(element.style, {
-            backgroundColor: `hsl(${hslBlueHue}, 100%, 50%)`,
-            color: "white",
-            position: "absolute",
-            left: `${x}px`,
-            top: `${y}px`,
-            width: "100px",
-            height: "100px",
-            borderRadius: "5rem",
-            border: "5px solid lightgray",
-            cursor: "pointer",
-            transition: "background-color 0.2s ease",
-        })
-        Object.assign(element, {
-            outputEvent: new Event(),
-            _inputEvents: new Set(),
-            energy: startingEnergy,
-            threshold,
-            energyDecayRate,
-            _updateColorBasedOnEnergy: (energy)=>{
-                const relativeEnergy = energy / element.threshold
-                if (energy >= 1) {
-                    element.style.backgroundColor = `hsl(${hslRedHue}, 100%, 50%)`
-                    let animation = element.animate(
-                        ...pulseAnimation
-                    )
-                    animation.onfinish = ()=>{
-                        // reset to min color
-                        element._updateColorBasedOnEnergy(Node.energyAfterFiring)
-                    }
-                } else {
-                    element.style.backgroundColor = `hsl(${energyToHue(relativeEnergy)}, 100%, 50%)`
-                }
-            },
-            _updateTickCallback: ()=>{
-                console.debug(`element.energy is:`,element.energy)
-                if (element.energy > element.threshold) {
-                    trigger(element.outputEvent)
-                    element._updateColorBasedOnEnergy(element.threshold+1) // show red and pulse
-                    element.energy = Node.energyAfterFiring
-                } else {
-                    element.energy -= element.energyDecayRate
-                    if (element.energy < Node.stableEnergyLevel) {
-                        element.energy = Node.stableEnergyLevel
-                    }
-                }
-            },
-            _inputResponse: (input)=>{
-                element.energy += input.intensity
-                element._updateColorBasedOnEnergy(element.energy)
-            },
-            addInput: (input, intensity) => {
-                everyTime(input).then(element._inputResponse)
-                element._inputEvents.add(input)
-            },
-            removeInput: (input) => {
-                // disconnect hook
-                input.remove(element._inputResponse)
-                // remove from set
-                element._inputEvents.delete(input)
-            },
-        })
-        makeDraggable(
-            element,
-            {
-                onDrag: ({isStart, isEnd, x, y})=>{
-                    if (onPositionChange) {
-                        onPositionChange({isStart, isEnd, x, y})
-                    }
-                }, 
-                itsPositionedCorrectlyIPromise: true,
-            }
-        )
-        Node.allNodes.add(new WeakRef(element))
-        return passAlongProps(element, props)
-    }
-    globalThis.Node = Node
-    Object.assign(Node, {
-        allNodes: new Set(),
-        updateInterval: 1000,
-        energyAfterFiring: 0,
-        stableEnergyLevel: 0.1,
-    })
-    
     const canvasElement = NodeCanvas({ backgroundColor: "whitesmoke", jsonObjects: {
             // FIXME: debugging
             "objects": [
@@ -288,20 +178,6 @@ globalThis.fabric = fabric // debugging
     })
     globalThis.canvasElement = canvasElement // debugging
     
-    // 
-    // Main node updater
-    // 
-    setInterval(() => {
-        for (let eachRef of Node.allNodes) {
-            let each = eachRef.deref()
-            // remove garbage collected nodes (if we didnt use WeakRefs, this would be a memory leak)
-            if (!each) {
-                Node.allNodes.delete(eachRef)
-            }
-            // have nodes update visuals in unison
-            each._updateTickCallback()
-        }
-    }, Node.updateInterval)
 
 
 const { html } = Elemental({
