@@ -186,6 +186,19 @@ globalThis.fabric = fabric // debugging
                 //     "radius": 50
                 // },
                 new FabricNode({
+                    id: "node+1",
+                    label: "A", 
+                    left:202,
+                    top:809,
+                    radius:50, 
+                    spikeThreshold:1,
+                    startingEnergy:0, 
+                    energyDecayRate:0.1,
+                    outputNodeMapping: {
+                        // "node-1": 1.1, // positive is excitatory, negative is inhibitory
+                    },
+                }),
+                new FabricNode({
                     id: "node-1",
                     label: "A", 
                     left:332, 
@@ -194,6 +207,9 @@ globalThis.fabric = fabric // debugging
                     spikeThreshold:1,
                     startingEnergy:0, 
                     energyDecayRate:0.1,
+                    outputNodeMapping: {
+                        "node+1": 1.1, // positive is excitatory, negative is inhibitory
+                    },
                 }),
                 new FabricNode({
                     id: "node-2",
@@ -206,7 +222,7 @@ globalThis.fabric = fabric // debugging
                     energyDecayRate:0.1,
                     outputNodeMapping: {
                         "node-1": 1, // positive is excitatory, negative is inhibitory
-                    }
+                    },
                 }),
                 new FabricNode({
                     id: "node-3",
@@ -219,7 +235,7 @@ globalThis.fabric = fabric // debugging
                     energyDecayRate:0.1,
                     outputNodeMapping: {
                         "node-1": 1, // positive is excitatory, negative is inhibitory
-                    }
+                    },
                 }),
                 new FabricNode({
                     id: "node-4",
@@ -232,7 +248,7 @@ globalThis.fabric = fabric // debugging
                     energyDecayRate:0.1,
                     outputNodeMapping: {
                         "node-1": 1, // positive is excitatory, negative is inhibitory
-                    }
+                    },
                 }),
                 new FabricNode({
                     id: "node-5",
@@ -245,7 +261,7 @@ globalThis.fabric = fabric // debugging
                     energyDecayRate:0.1,
                     outputNodeMapping: {
                         "node-1": 1, // positive is excitatory, negative is inhibitory
-                    }
+                    },
                 }),
                 new FabricNode({
                     id: "node-6",
@@ -258,7 +274,7 @@ globalThis.fabric = fabric // debugging
                     energyDecayRate:0.1,
                     outputNodeMapping: {
                         "node-1": 1, // positive is excitatory, negative is inhibitory
-                    }
+                    },
                 }),
             ],
             // "background": "rgba(0, 0, 0, 0)",
