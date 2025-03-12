@@ -52,9 +52,6 @@ const connectionStrengthToHueBase = pointsToFunction({
     areSorted: true,
     method: "linearInterpolation",
 })
-const connectionStrengthToHue = (connectionStrength)=>{
-    return connectionStrengthToHueBase(connectionStrength) % 255
-}
 const allNodes = new Map()
 globalThis.allNodes = allNodes // debugging
 const getAllNodes = ()=>{
@@ -353,7 +350,6 @@ export function NodeCanvas({
                         for (let eachOutputNode of actualTarget.outputs) {
                             const connectionStrength = actualTarget.outputNodeMapping[eachOutputNode.id]
                             const stroke = `hsl(${connectionStrengthToHueBase(connectionStrength)}, 100%, 50%)`
-                            console.debug(`stroke is:`,stroke)
                             const line = new fabric.Line([...Object.values(getCenter(target)), ...Object.values(getCenter(eachOutputNode))], {
                                 objectCaching: false,
                                 ...outputConnectionStyles,
@@ -391,18 +387,19 @@ export function NodeCanvas({
                     console.debug(`node cycle start is:`,Object.fromEntries(nodes.map(each=>[each.id, each.energy])))
 
                     // collect energy from fired nodes
+                    const amountToAddForEach = {}
                     const lines = []
                     for (let each of nodes) {
                         if (each.isFiring) {
                             for (const [id, relationship] of Object.entries(each.outputNodeMapping)) {
                                 const node = allNodes.get(id).deref()
                                 if (node) {
-                                    node.energy += relationship
+                                    amountToAddForEach[node.id] = amountToAddForEach[node.id]||0
+                                    amountToAddForEach[node.id] += relationship
                                 }
                             }
                         }
                     }
-                    console.debug(`nodes after fired nodes (peak energy for all) is:`,Object.fromEntries(nodes.map(each=>[each.id, each.energy])))
 
                     // reset nodes that just fired
                     for (let each of nodes) {
@@ -414,14 +411,23 @@ export function NodeCanvas({
                             pulse(each)
                             // show lines briefly
                             for (const [id, relationship] of Object.entries(each.outputNodeMapping)) {
+                                const connectionStrength = each.outputNodeMapping[id]
+                                const stroke = `hsl(${connectionStrengthToHueBase(connectionStrength)}, 100%, 50%)`
                                 const line = new fabric.Line([...Object.values(getCenter(each)), ...Object.values(getCenter(allNodes.get(id).deref()))], {
                                     objectCaching: false,
                                     ...outputConnectionStyles,
+                                    stroke,
                                 })
                                 lines.push(line)
                                 canvas.insertAt(0, line)
                             }
                         }
+                    }
+
+                    // now add the amountToAddForEach to the nodes
+                    // NOTE: doing this after makes a difference for self-connections!
+                    for (const [key, value] of Object.entries(amountToAddForEach)) {
+                        allNodes.get(key).deref().energy += value
                     }
                     
                     // discover what new nodes are firing
