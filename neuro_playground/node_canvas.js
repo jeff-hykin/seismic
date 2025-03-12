@@ -29,6 +29,7 @@ function duplicateAnimationUpThenDown({start, end, steps}) {
 
 const hslBlueHue = 213
 const hslYellowHue = 49
+const hslGreenHue = 120
 const hslRedHue = 14
 const energyToHueBase = pointsToFunction({
     xValues: [0, 1],
@@ -45,7 +46,15 @@ const energyToHue = (energy)=>{
     }
     return energyToHueBase(energy)
 }
-
+const connectionStrengthToHueBase = pointsToFunction({
+    xValues: [-0.2,  0.4],
+    yValues: [ hslRedHue+255, hslGreenHue],
+    areSorted: true,
+    method: "linearInterpolation",
+})
+const connectionStrengthToHue = (connectionStrength)=>{
+    return connectionStrengthToHueBase(connectionStrength) % 255
+}
 const allNodes = new Map()
 globalThis.allNodes = allNodes // debugging
 const getAllNodes = ()=>{
@@ -338,13 +347,17 @@ export function NodeCanvas({
             if (target) {
                 const isHoveringANode = target.type === FabricNode.type.toLowerCase()
                 if (isHoveringANode) {
-                    const actualTarget = getAllNodes().filter(each=>each.id===target.id)[0]
+                    const actualTarget = allNodes.get(target.id).deref()
                     if (actualTarget) {
                         prevHoveNodeId = actualTarget.id
-                        for (let each of actualTarget.outputs) {
-                            const line = new fabric.Line([...Object.values(getCenter(target)), ...Object.values(getCenter(each))], {
+                        for (let eachOutputNode of actualTarget.outputs) {
+                            const connectionStrength = actualTarget.outputNodeMapping[eachOutputNode.id]
+                            const stroke = `hsl(${connectionStrengthToHueBase(connectionStrength)}, 100%, 50%)`
+                            console.debug(`stroke is:`,stroke)
+                            const line = new fabric.Line([...Object.values(getCenter(target)), ...Object.values(getCenter(eachOutputNode))], {
                                 objectCaching: false,
                                 ...outputConnectionStyles,
+                                stroke,
                             })
                             hoverLines.push(line)
                             canvas.insertAt(0, line)
