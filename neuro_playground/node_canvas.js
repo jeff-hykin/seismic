@@ -42,7 +42,7 @@ export class FabricNode extends fabric.Circle {
     static get type() {
         return "FabricNode";
     }
-    constructor({ label, left=100, top=100, radius=50, spikeThreshold=1, startingEnergy=0, energyDecayRate=0.1, id, outputNodeIds=[], inputNodeIds=[], ...custom }) {
+    constructor({ label, left=100, top=100, radius=50, spikeThreshold=1, energy=0, energyDecayRate=0.1, id, outputNodeMapping=[], inputNodeIds=[], isFiring=false, willFireNextTimestepBecauseClick=false, stableEnergyLevel=0.1, energyAfterFiring=0, ...custom }) {
         super({
             radius,
             "startAngle": 0,
@@ -91,18 +91,21 @@ export class FabricNode extends fabric.Circle {
             id: id||`${Math.random()}`,
             label,
             spikeThreshold,
-            startingEnergy,
+            energy,
             energyDecayRate,
-            outputNodeIds,
+            outputNodeMapping,
             inputNodeIds,
-            willFireNextTimestepBecauseClick: false,
+            isFiring,
+            willFireNextTimestepBecauseClick,
+            stableEnergyLevel,
+            energyAfterFiring,
         })
         allNodes.set(this.id, new WeakRef(this))
         this.updateInputOutputConnections()
     }
     updateInputOutputConnections() {
         // if something is listed as an output, make the other node knows it is an input
-        for (let each of this.outputNodeIds) {
+        for (const [each, value] of Object.entries(this.outputNodeMapping)) {
             if (allNodes.has(each)) {
                 const value = allNodes.get(each).deref()
                 if (value) {
@@ -112,20 +115,10 @@ export class FabricNode extends fabric.Circle {
                 }
             }
         }
-        for (let each of this.inputNodeIds) {
-            if (allNodes.has(each)) {
-                const value = allNodes.get(each).deref()
-                if (value) {
-                    value.outputNodeIds.includes(this.id) || value.outputNodeIds.push(this.id)
-                } else {
-                    allNodes.delete(each)
-                }
-            }
-        }
     }
     get outputs() {
-        let outputs = [] 
-        for (let id of this.outputNodeIds) {
+        let outputs = []
+        for (const [id, value] of Object.entries(this.outputNodeMapping)) {
             if (allNodes.has(id)) {
                 const value = allNodes.get(id).deref()
                 if (value) {
@@ -157,9 +150,14 @@ export class FabricNode extends fabric.Circle {
             id: this.id,
             label: this.label,
             spikeThreshold: this.spikeThreshold,
-            startingEnergy: this.startingEnergy,
+            energy: this.energy,
             energyDecayRate: this.energyDecayRate,
+            isFiring: this.isFiring,
+            outputNodeMapping: this.outputNodeMapping,
+            inputNodeIds: this.inputNodeIds,
             willFireNextTimestepBecauseClick: this.willFireNextTimestepBecauseClick,
+            stableEnergyLevel: this.stableEnergyLevel,
+            energyAfterFiring: this.energyAfterFiring,
         }
     }
 }
@@ -198,7 +196,7 @@ export class FabricLine extends fabric.Path {
             id: this.id,
             label: this.label,
             spikeThreshold: this.spikeThreshold,
-            startingEnergy: this.startingEnergy,
+            energy: this.energy,
             energyDecayRate: this.energyDecayRate,
             willFireNextTimestepBecauseClick: this.willFireNextTimestepBecauseClick,
         }
@@ -303,9 +301,14 @@ export function NodeCanvas({
                         canvas.renderAll()
                     }
                     // ensure nothing gets messed up
-                    eachNode.set('stroke', originalColor)
-                    eachNode.set('radius', originalRadius)
-                    canvas.renderAll()
+                    await new Promise((resolve)=>setTimeout(()=>{
+                        eachNode.set('stroke', originalColor)
+                        eachNode.set('radius', originalRadius)
+                        eachNode.set('stroke', `hsl(0, 0%, 82.75%)`)
+                        eachNode.set('radius', 50)
+                        canvas.renderAll()
+                        resolve()
+                    }, 100))
                 }
                 activeAnimations.delete(node.id)
             }
@@ -339,8 +342,7 @@ export function NodeCanvas({
                                 ...outputConnectionStyles,
                             })
                             hoverLines.push(line)
-                            canvas.add(line)
-                            canvas.add(each) // to draw on top of the line
+                            canvas.insertAt(0, line)
                         }
                         
                         for (let each of actualTarget.inputs) {
@@ -349,10 +351,8 @@ export function NodeCanvas({
                                 ...inputConnectionStyles,
                             })
                             hoverLines.push(line)
-                            canvas.add(line)
-                            canvas.add(each) // to draw on top of the line
+                            canvas.insertAt(0, line)
                         }
-                        canvas.add(target) // to draw on top of the line
                     }
                 }
             }
@@ -369,13 +369,81 @@ export function NodeCanvas({
                 getCurrentState: ()=>canvas.toObject(),
                 loadState: (state)=>canvas.loadFromObject(state),
                 afterForwardsTimestep: ()=>{
+                    const nodes = {}
                     for (let each of canvas.objects) {
                         if (each.type === FabricNode.type.toLowerCase()) {
-                            if (each.willFireNextTimestepBecauseClick) {
-                                each.willFireNextTimestepBecauseClick = false
+                            nodes[each.id] = each
+                        }
+                    }
+                    
+                    console.debug(`nodes is:`,Object.fromEntries(Object.entries(nodes).map(([id, node])=>[id, node.energy])))
+
+                    // collect energy from fired nodes
+                    const lines = []
+                    for (let each of Object.values(nodes)) {
+                        if (each.isFiring) {
+                            for (const [id, relationship] of Object.entries(each.outputNodeMapping)) {
+                                nodes[id].energy += relationship
+                                console.debug(`each is:${JSON.stringify({top: each.top, left: each.left, id: each.id})}`)
                             }
                         }
                     }
+                    console.debug(`nodes is:`,Object.fromEntries(Object.entries(nodes).map(([id, node])=>[id, node.energy])))
+
+                    // reset nodes that just fired
+                    for (let each of Object.values(nodes)) {
+                        if (each.isFiring) {
+                            each.energy = each.energyAfterFiring
+                            each.isFiring = false
+                        }
+                    }
+                    
+                    // discover what new nodes are firing
+                    for (let each of Object.values(nodes)) {
+                        const isAboveThreshold = each.energy >= each.spikeThreshold
+                        const fired = isAboveThreshold||each.willFireNextTimestepBecauseClick
+                        if (fired) {
+                            if (!each.willFireNextTimestepBecauseClick) {
+                                pulse(each)
+                                for (const [id, relationship] of Object.entries(each.outputNodeMapping)) {
+                                    nodes[id].energy += relationship
+                                    
+                                    console.debug(`each is:${JSON.stringify({top: each.top, left: each.left, id: each.id})}`)
+                                    // show line briefly
+                                    const line = new fabric.Line([...Object.values(getCenter(each)), ...Object.values(getCenter(nodes[id]))], {
+                                        objectCaching: false,
+                                        ...outputConnectionStyles,
+                                    })
+                                    lines.push(line)
+                                    canvas.insertAt(0, line)
+                                }
+                            }
+                            each.willFireNextTimestepBecauseClick = false
+                            each.isFiring = true
+                        }
+                    }
+                    setTimeout(() => {
+                        for (let each of lines) {
+                            canvas.remove(each)
+                        }
+                    }, 100)
+                    
+                    // account for decay
+                    for (let each of Object.values(nodes)) {
+                        if (!each.isFiring) {
+                            each.energy -= each.energyDecayRate
+                            if (each.energy < each.stableEnergyLevel) {
+                                each.energy = each.stableEnergyLevel
+                            }
+                        }
+                    }
+                    
+                    // update color based on energy
+                    for (let each of Object.values(nodes)) {
+                        each.set('fill', `hsl(${energyToHue(each.energy)}, 100%, 50%)`)
+                    }
+                    console.debug(`nodes is:`,Object.fromEntries(Object.entries(nodes).map(([id, node])=>[id, node.energy])))
+                    
                     canvas.renderAll()
                 },
             })
@@ -384,9 +452,24 @@ export function NodeCanvas({
             onceFabricLoads&&onceFabricLoads(canvas)
         },
         ...props,
+        // onObjectModified: (event)=>{
+        //     const { target } = event
+        //     if (target?.id) {
+        //         const realObject = canvas.objects.filter(each=>each.id===target.id)[0]
+        //         Object.assign(realObject,target)
+        //     }
+        //     canvas.renderAll()
+        // },
         onMouseMove: (event)=>{
             const { target } = event
+            // not sure why this is needed, but it is (some sort of caching issue with fabric.js) desyncs canvas.objects with the actual visual objects
+            if (target?.id) {
+                const realObject = canvas.objects.filter(each=>each.id===target.id)[0]
+                Object.assign(realObject,target)
+                console.debug(`realObject is:${JSON.stringify({top: realObject.top, left: realObject.left, id: realObject.id, stroke: target.stroke})}`,)
+            }
             showConnectionsOf(target)
+            // canvas.renderAll()
         },
         onMouseDown: (event)=>{
             prevMouseDownTime = Date.now()
@@ -400,7 +483,6 @@ export function NodeCanvas({
         onMouseUp: (event)=>{
             const countsAsAClick = Date.now()-prevMouseDownTime < 100
             if (countsAsAClick) {
-                console.debug(`countsAsAClick is:`,countsAsAClick)
                 const { target } = event
                 if (target) {
                     if (target.type === FabricNode.type.toLowerCase()) {
@@ -409,7 +491,8 @@ export function NodeCanvas({
                         // this is a workaround for that, and eventually this workaround should be removed
                         const actualTarget = canvas.objects.filter(each=>each.id===target.id)[0]
                         element.timelineManager.scheduleTask(()=>{
-                            actualTarget.willFireNextTimestepBecauseClick = true
+                            // actualTarget.willFireNextTimestepBecauseClick = true
+                            actualTarget.energy += 1
                         })
                     }
                 }
