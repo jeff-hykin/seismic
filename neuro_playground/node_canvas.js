@@ -32,7 +32,7 @@ const hslYellowHue = 49
 const hslRedHue = 14
 const energyToHueBase = pointsToFunction({
     xValues: [0, 1],
-    yValues: [hslBlueHue, hslYellowHue],
+    yValues: [hslBlueHue, hslRedHue],
     areSorted: true,
     method: "linearInterpolation",
 })
